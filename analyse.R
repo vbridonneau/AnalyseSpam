@@ -91,37 +91,59 @@ par(mfrow=c(1,2))
 plot.PCA(rPCAnorm,axes=c(1,3),choix="ind",habillage=colclust,invisible="quali")
 plot.PCA(rPCAnorm,axes=c(1,3),choix="var")
 
+
+
+######## Analysis ##########
+
 data_train$label <- as.factor(data_train$label)
-lin_disc_an <- lda(label~., data = data_train)
+lin_disc_an <- naiveBayes(label~., data = data_train)
+#lin_disc_an <- glm(label~., data = data_train, family=binomial())
 data_test_x <- data.frame(data_train[-58], check.names = FALSE)
 test_spam_predict <- predict(lin_disc_an, newdata=data_test_x, type="class")
-print(table(test_spam_predict$class, data_train$label))
+# result_glm_train_predict <- (((test_spam_predict > 0.5)+0))
+confmat = table(test_spam_predict, data_train$label)
+print(confmat)
+TP <- confmat[1, 1]
+TN <- confmat[2, 2]
+FP <- confmat[1, 2]
+FN <- confmat[2, 1]
+cat("senible : ", TP / (TP + FN), "\n")
+cat("precision : ", TP / (TP + FP), "\n")
+# print(table(result_glm_train_predict, data_train$label))
 
-spam_error_rate <- mean(test_spam_predict$class != data_train$label)
+spam_error_rate <- mean(test_spam_predict != data_train$label)
+#spam_error_rate <- mean(result_glm_train_predict  != data_train$label)
 cat("Error rate : ", spam_error_rate, "\n")
 
-MSE <- 0
 n <- length(data_train$label)
-# Ne garder que 80%
-sample_data_train <- sample(1:n, 0.8*n)
-sample_data_test <- setdiff(1:n, sample_data_train)
-
-data_train_sample <- data_train[c(sample_data_train), ]
-data_test_sample <- data_train[c(sample_data_test), ]
-
-lin_disc_an <- lda(label~., data_train_sample)
-data_test_x <- data.frame(data_test_sample[-58], check.names = FALSE)
-prediction <- predict(lin_disc_an, data_test_x, type="class")
-
-predicted_class <- prediction$class
-
-transform(data_test_sample, label = as.numeric(label))
-
-for(i in 1:length(sample_data_test)) {
-  predicted <- sum(numeric(predicted_class[i]) + 1) - 1
-  real <- sum(numeric(data_test_sample$label[i]) + 1) - 1
-  MSE <- MSE + (real - predicted)^2
+MMSE <- 0
+int_sample <- 1:(0.1*n)
+for (i in int_sample) {
+  MSE <- 0
+  # Ne garder que 80%
+  sample_data_train <- sample(1:n, 0.8*n)
+  sample_data_test <- setdiff(1:n, sample_data_train)
+  
+  data_train_sample <- data_train[c(sample_data_train), ]
+  data_test_sample <- data_train[-c(sample_data_train), ]
+  
+  lin_disc_an <- naiveBayes(label~., data_train_sample)
+  # lin_disc_an <- glm(label~., data_train_sample, , family=binomial())
+  data_test_x <- data.frame(data_test_sample[-58], check.names = FALSE)
+  prediction <- predict(lin_disc_an, data_test_x, type="class")
+  # prediction <- predict(lin_disc_an, data_test_x, type="response")
+  
+  predicted_class <- prediction
+  
+  transform(data_test_sample, label = as.numeric(label))
+  
+  for(i in 1:length(sample_data_test)) {
+    predicted <- sum(numeric(predicted_class[i]) + 1) - 1
+    real <- sum(numeric(data_test_sample$label[i]) + 1) - 1
+    MSE <- MSE + (real - predicted)^2
+  }
+  MSE <- MSE / length(sample_data_test)
+  MMSE <- MMSE + MSE
 }
-
-MSE <- MSE / length(sample_data_test)
-cat("Valeur du résidu avec la validation croisée", MSE, "\n")
+MMSE <- MMSE / length(int_sample)
+cat("Valeur du résidu avec la validation", MMSE, "\n")
