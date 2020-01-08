@@ -5,6 +5,9 @@ library("GGally")
 library(MASS)
 library(e1071)
 library(rpart)
+library(class)
+library(caret)
+library(ROCR)
 
 
 
@@ -95,29 +98,47 @@ plot.PCA(rPCAnorm,axes=c(1,3),choix="var")
 
 ######## Analysis ##########
 
+#for(k in 1:20) {
 data_train$label <- as.factor(data_train$label)
-lin_disc_an <- naiveBayes(label~., data = data_train)
-#lin_disc_an <- glm(label~., data = data_train, family=binomial())
-data_test_x <- data.frame(data_train[-58], check.names = FALSE)
-test_spam_predict <- predict(lin_disc_an, newdata=data_test_x, type="class")
-# result_glm_train_predict <- (((test_spam_predict > 0.5)+0))
-confmat = table(test_spam_predict, data_train$label)
+
+
+n <- length(data_train$label)
+sample_data_train <- sample(1:n, 0.75*n)
+sample_data_test <- setdiff(1:n, sample_data_train)
+
+data_train_sample <- data_train[c(sample_data_train), ]
+data_test_sample <- data_train[-c(sample_data_train), ]
+
+#data_train_sample <- data_train_sample[c("capital_run_length_average", "capital_run_length_longest", "capital_run_length_total", "label")]
+#data_test_sample <- data_test_sample[c("capital_run_length_average", "capital_run_length_longest", "capital_run_length_total", "label")]
+
+# lin_disc_an <- qda(label~., data = data_train_sample)
+# knnp <- knn(train = data_train_sample, test = data_test_sample, cl = data_train_sample$label, k = k)
+lin_disc_an <- glm(label~., data = data_train_sample, family=binomial())
+data_test_x <- data.frame(data_test_sample[-58], check.names = FALSE)
+#data_test_x <- data.frame(data_test_sample[c("capital_run_length_average", "capital_run_length_longest", "capital_run_length_total")], check.names = FALSE)
+test_spam_predict <- predict(lin_disc_an, newdata=data_test_x, type="response")
+result_glm_train_predict <- (((test_spam_predict > 0.5)+0))
+confmat = table(result_glm_train_predict, data_test_sample$label)
+#confmat = table(knnp, data_test_sample$label)
 print(confmat)
 TP <- confmat[1, 1]
 TN <- confmat[2, 2]
 FP <- confmat[1, 2]
 FN <- confmat[2, 1]
-cat("senible : ", TP / (TP + FN), "\n")
-cat("precision : ", TP / (TP + FP), "\n")
+#cat("senible : ", TP / (TP + FN), "\n")
+#cat("precision : ", TP / (TP + FP), "\n")
 # print(table(result_glm_train_predict, data_train$label))
 
-spam_error_rate <- mean(test_spam_predict != data_train$label)
-#spam_error_rate <- mean(result_glm_train_predict  != data_train$label)
+#spam_error_rate <- mean(knnp != data_test_sample$label)
+#spam_error_rate <- mean(test_spam_predict$class != data_test_sample$label)
+spam_error_rate <- mean(result_glm_train_predict  != data_train$label)
 cat("Error rate : ", spam_error_rate, "\n")
 
+if(FALSE) {
 n <- length(data_train$label)
-MMSE <- 0
-int_sample <- 1:(0.1*n)
+#MMSE <- 0
+#int_sample <- 1:5#(0.1*n)
 for (i in int_sample) {
   MSE <- 0
   # Ne garder que 80%
@@ -126,14 +147,21 @@ for (i in int_sample) {
   
   data_train_sample <- data_train[c(sample_data_train), ]
   data_test_sample <- data_train[-c(sample_data_train), ]
-  
-  lin_disc_an <- naiveBayes(label~., data_train_sample)
+
+  knnp <- knn(train = data_train_sample, test = data_test_sample, cl = data_train_sample$label, k = k)
+  # lin_disc_an <- naiveBayes(label~., data_train_sample)
   # lin_disc_an <- glm(label~., data_train_sample, , family=binomial())
-  data_test_x <- data.frame(data_test_sample[-58], check.names = FALSE)
-  prediction <- predict(lin_disc_an, data_test_x, type="class")
+  # data_test_x <- data.frame(data_test_sample[-58], check.names = FALSE)
+  # prediction <- predict(lin_disc_an, data_test_x, type="class")
   # prediction <- predict(lin_disc_an, data_test_x, type="response")
+  confmat = table(knnp, data_test_sample$label)
+  print(confmat)
   
-  predicted_class <- prediction
+  spam_error_rate <- mean(knnp != data_test_sample$label)
+  cat("Error rate : ", spam_error_rate, "\n")
+  
+  #predicted_class <- prediction
+  predicted_class <- knnp
   
   transform(data_test_sample, label = as.numeric(label))
   
@@ -146,4 +174,6 @@ for (i in int_sample) {
   MMSE <- MMSE + MSE
 }
 MMSE <- MMSE / length(int_sample)
-cat("Valeur du résidu avec la validation", MMSE, "\n")
+cat("Valeur du résidu avec la validation", MMSE, "pour k =", k, "\n")
+}
+#}
